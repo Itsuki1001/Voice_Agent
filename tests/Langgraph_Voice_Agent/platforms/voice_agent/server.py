@@ -132,14 +132,16 @@ async def websocket_endpoint(browser_ws: WebSocket):
         llm_cancel = threading.Event()
         sentence_q = _q.Queue()
 
+        # ── CHANGE: signal audio_start FIRST so TTS WS opens in parallel ──────
+        await send_json({"type": "audio_start", "session_id": sid})
+        bot_speaking.set()
+
+        # now kick off LLM — TTS WS is already warming up concurrently
         llm_future = loop.run_in_executor(
             None,
             stream_graph_sentences,
             transcript, thread_id, sentence_q, llm_cancel,
         )
-
-        await send_json({"type": "audio_start", "session_id": sid})
-        bot_speaking.set()
 
         tts_streamer = TTSSentenceStreamer(on_audio_chunk=send_bytes_ws)
 
