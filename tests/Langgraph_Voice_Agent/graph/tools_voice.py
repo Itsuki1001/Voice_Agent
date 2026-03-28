@@ -4,7 +4,8 @@ import requests
 import dateparser
 from collections import defaultdict
 from datetime import timezone
-
+from pathlib import Path
+from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from ics import Calendar
 
@@ -17,7 +18,7 @@ load_dotenv()
 # ==================================================
 # ICS CALENDAR
 # ==================================================
-
+EMBED_MODEL="text-embedding-3-small"
 ICS_REFRESH_INTERVAL = 5 * 60
 
 _calendar = None
@@ -45,13 +46,14 @@ def get_calendar() -> Calendar | None:
 # ==================================================
 
 def setup_rag():
-    model_name = "sentence-transformers/all-MiniLM-L6-v2"
-    embeddings = HuggingFaceEmbeddings(model_name=model_name)
+    embeddings = OpenAIEmbeddings(model=EMBED_MODEL, api_key=os.getenv("OPENAI_API_KEY"))
+
     vectorstore = FAISS.load_local(
-        "peetsinn_index",
+        str(Path(__file__).parent.parent / "peetsinn_index"),
         embeddings,
         allow_dangerous_deserialization=True,
     )
+
     return vectorstore.as_retriever(search_kwargs={"k": 3})
 
 
