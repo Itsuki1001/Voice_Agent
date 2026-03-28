@@ -30,7 +30,7 @@ from sarvamai import AsyncSarvamAI
 SAMPLE_RATE    = 16000
 CHUNK_DURATION = 0.05        # 50 ms — halved from 100 ms for lower first-byte latency
 SILENCE_HOLD   = 0.3       # seconds after END_SPEECH before finalizing
-BARGE_IN_RMS   = 0.09      # normalised RMS threshold
+BARGE_IN_RMS   = 0.1      # normalised RMS threshold
 
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────

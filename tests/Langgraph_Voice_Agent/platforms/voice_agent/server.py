@@ -84,16 +84,22 @@ def stream_graph_sentences(
                 if type(chunk).__name__ in ("AIMessageChunk", "AIMessage"):
 
                     # ── Filler ────────────────────────────────────────────
-                    if not filler_sent and getattr(chunk, "tool_calls", None):
-                        tool_name = chunk.tool_calls[0].get("name", "")
-                        if tool_name:
+                    if getattr(chunk, "tool_calls", None):
+                        if not filler_sent:
+                            tool_name = chunk.tool_calls[0].get("name", "")
                             filler = TOOL_FILLERS.get(tool_name, DEFAULT_FILLER)
                             sentence_q.put(filler)
                             filler_sent = True
-                        continue
+
+                        # DO NOT append content, but also DO NOT skip processing entirely
+                        continue_processing = False
+                    else:
+                        continue_processing = True
+
+                    if continue_processing and chunk.content:
 
                     # ── Normal streaming ──────────────────────────────────
-                    if chunk.content:
+   
                         buffer += chunk.content
                         parts = _SENT_RE.split(buffer)
                         if len(parts) > 1:
