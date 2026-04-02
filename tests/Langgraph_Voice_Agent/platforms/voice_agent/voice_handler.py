@@ -1,7 +1,7 @@
 import asyncio
 import sys
 import sounddevice as sd
-import websockets
+import ws_routes
 import json
 import numpy as np
 import time
@@ -187,7 +187,7 @@ async def voice_loop():
     headers = {"Authorization": f"Token {DEEPGRAM_API_KEY}"}
     print("🎙️  Voice agent ready. Speak now...\n")
 
-    async with websockets.connect(uri, additional_headers=headers) as ws:
+    async with ws_routes.connect(uri, additional_headers=headers) as ws:
 
         async def send_audio():
             loop = asyncio.get_event_loop()

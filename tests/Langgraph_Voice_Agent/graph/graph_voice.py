@@ -78,7 +78,13 @@ llm = ChatOpenAI(
 )
 llm_with_tools = llm.bind_tools(tools)
 
-atexit.register(lambda: asyncio.get_event_loop().run_until_complete(_http_client.aclose()))
+def _cleanup():
+    try:
+        asyncio.run(_http_client.aclose())
+    except Exception:
+        pass
+
+atexit.register(_cleanup)
 
 # -------------------------------------------------------------------
 # STATE
@@ -135,23 +141,23 @@ def llm_node(state: State, config: RunnableConfig) -> State:
             }
         
         # Filter first, then trim
-        clean = filter_messages(state["messages"])
+        
         
         trimmed = trim_messages(
-            clean,
+            state["messages"],
             strategy="last",
             token_counter=count_tokens_approximately,
             max_tokens=MAX_TOKENS,
             start_on="human",
             end_on=("human", "tool"),
         )
-        
+        clean = filter_messages(trimmed)
 
         
         
         # Add system prompt
         system_prompt = get_system_prompt()
-        conversation = [SystemMessage(content=system_prompt)] + trimmed
+        conversation = [SystemMessage(content=system_prompt)] + clean
         
         # Log token usage
         tokens = count_tokens_approximately(conversation)
@@ -164,12 +170,20 @@ def llm_node(state: State, config: RunnableConfig) -> State:
         
         return {"messages": [response]}
     
-    except TimeoutError:
-        logger.error(f"Timeout for {sender_id}")
-        return {"messages": [AIMessage(content="Request timed out. Try again?")]}
+    except httpx.TimeoutException:
+        logger.error(f"OpenAI timeout for {sender_id} after {TIMEOUT}s")
+        return {"messages": [AIMessage(content="Sorry, the request timed out. Please try again.")]}
+    
+    except httpx.ConnectError:
+        logger.error(f"OpenAI connection failed for {sender_id}")
+        return {"messages": [AIMessage(content="Connection issue. Please try again.")]}
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"OpenAI HTTP error for {sender_id}: {e.response.status_code}")
+        return {"messages": [AIMessage(content="Service error. Please try again.")]}
     
     except Exception as e:
-        logger.error(f"Error: {type(e).__name__}: {e}")
+        logger.error(f"Unexpected error for {sender_id}: {type(e).__name__}: {e}")
         return {"messages": [AIMessage(content="An error occurred. Please try again.")]}
 
 # -------------------------------------------------------------------

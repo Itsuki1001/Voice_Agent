@@ -25,12 +25,13 @@ import struct
 import array
 import math
 from sarvamai import AsyncSarvamAI
+import logging
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SAMPLE_RATE    = 16000
 CHUNK_DURATION = 0.05        # 50 ms — halved from 100 ms for lower first-byte latency
 SILENCE_HOLD   = 0.3       # seconds after END_SPEECH before finalizing
-BARGE_IN_RMS   = 0.1      # normalised RMS threshold
+BARGE_IN_RMS   = 0.12    # normalised RMS threshold
 
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────
@@ -78,13 +79,14 @@ class STTSession:
         self,
         api_key: str,
         on_transcript,           # async (text: str) -> None
-        on_interim=None,         # async (text: str) -> None  |  None
-        on_barge_in=None,        # async ()           -> None  |  None
+        on_interim=None, 
+        on_barge_in=None,      # async () -> None  |  None
     ):
         self._sarvam       = AsyncSarvamAI(api_subscription_key=api_key)
         self.on_transcript = on_transcript
         self.on_interim    = on_interim
         self.on_barge_in   = on_barge_in
+        
 
     # ── public entry point ────────────────────────────────────────────────────
 
@@ -92,8 +94,6 @@ class STTSession:
         self,
         audio_queue: asyncio.Queue,   # bytes chunks | None sentinel
         bot_speaking: asyncio.Event,
-        cancel_event: asyncio.Event,
-        current_task: list,           # current_task[0] = active asyncio.Task | None
     ) -> None:
         loop = asyncio.get_running_loop()
 
@@ -110,26 +110,22 @@ class STTSession:
                                 sample_rate=SAMPLE_RATE)
 
             await asyncio.gather(
-                self._send_audio(ws, audio_queue, bot_speaking,
-                                 cancel_event, current_task, loop),
+                self._send_audio(ws, audio_queue, bot_speaking,loop),
                 self._recv_transcripts(ws, loop),
             )
 
     # ── internal: audio sender ────────────────────────────────────────────────
 
-    async def _send_audio(self, ws, audio_queue, bot_speaking,
-                          cancel_event, current_task, loop):
+    async def _send_audio(self, ws, audio_queue, bot_speaking,loop):
         while True:
             chunk: bytes | None = await audio_queue.get()
             if chunk is None:
                 break
-
-            # Barge-in: fire-and-forget, never blocks the audio path
             if rms_int16(chunk) > BARGE_IN_RMS:
-                loop.create_task(
-                    self._handle_barge_in(bot_speaking, cancel_event, current_task)
-                )
+                if self.on_barge_in:
+                    loop.create_task(self.on_barge_in())
 
+            
             if bot_speaking.is_set():
                 continue                # discard audio while bot speaks
 
@@ -140,14 +136,7 @@ class STTSession:
                 sample_rate=SAMPLE_RATE,
             )
 
-    async def _handle_barge_in(self, bot_speaking, cancel_event, current_task):
-        cancel_event.set()
-        bot_speaking.clear()
-        task = current_task[0]
-        if task and not task.done():
-            task.cancel()
-        if self.on_barge_in:
-            await self.on_barge_in()
+
 
     # ── internal: transcript receiver ─────────────────────────────────────────
 
@@ -230,11 +219,10 @@ if __name__ == "__main__":
     async def _test():
         print("🎤  Listening… Ctrl-C to stop\n")
 
-        audio_queue  = asyncio.Queue()
+        audio_queue  = asyncio.Queue(maxsize=10)  # backpressure: drop if not consumed fast enough
         bot_speaking = asyncio.Event()
-        cancel_event = asyncio.Event()
-        current_task = [None]
-        loop         = asyncio.get_running_loop()
+
+        loop= asyncio.get_running_loop()
 
         async def on_transcript(text: str):
             print(f"\n✅  {text}\n")
@@ -247,6 +235,13 @@ if __name__ == "__main__":
         chunk_frames = int(SAMPLE_RATE * CHUNK_DURATION)
 
         def mic_cb(indata, frames, time, status):
+
+            if audio_queue.full():
+                try:
+                    audio_queue.get_nowait()  # remove oldest
+                except asyncio.QueueEmpty:
+                    pass
+
             try:
                 audio_queue.put_nowait(bytes(indata))   # put_nowait: no scheduler yield
             except asyncio.QueueFull:
@@ -262,7 +257,7 @@ if __name__ == "__main__":
         )
         stream.start()
         try:
-            await stt.run(audio_queue, bot_speaking, cancel_event, current_task)
+            await stt.run(audio_queue, bot_speaking)
         finally:
             stream.stop()
             stream.close()

@@ -11,13 +11,17 @@ import re
 import sys
 import threading
 import uuid
-
+from langchain_core.messages import ToolMessage
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-
-from stt import STTSession
-from tts import TTSSentenceStreamer, init_tts, split_sentences
+from fastapi.middleware.cors import CORSMiddleware
+# from sqlalchemy import text
+import random
+from .stt import STTSession
+from .tts import TTSSentenceStreamer, init_tts, split_sentences
+from collections import defaultdict
+import time
 
 load_dotenv()
 
@@ -25,25 +29,103 @@ SARVAM_API_KEY     = os.getenv("SARVAM_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 CARTESIA_API_KEY  = os.getenv("CARTESIA_API_KEY")
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from graph.graph_voice import graph
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MIN_SENTENCE_CHARS = 0
 LLM_DEBOUNCE       = 0
 
+
+
+# ── Rate limiting stores ─────────────────────────────
+
+ip_connections    = defaultdict(int)
+session_requests  = defaultdict(int)
+
+ip_hourly_requests = defaultdict(lambda: {"count": 0, "reset_at": time.time() + 3600})
+ip_daily_requests  = defaultdict(lambda: {"count": 0, "reset_at": time.time() + 86400})
+
+
+# limits
+MAX_CONCURRENT_PER_IP    = 3
+MAX_REQUESTS_PER_SESSION = 50
+MAX_HOURLY_REQUESTS      = 5
+MAX_DAILY_REQUESTS       = 2
+
+
+# ── Rate limit helpers ────────────────────────────────────────────────────────
+
+
+def is_ip_limit_reached(ip: str) -> bool:
+    now = time.time()
+
+    hourly = ip_hourly_requests[ip]
+    if now > hourly["reset_at"]:
+        hourly["count"] = 0
+        hourly["reset_at"] = now + 3600
+    if hourly["count"] >= MAX_HOURLY_REQUESTS:
+        return True
+
+    daily = ip_daily_requests[ip]
+    if now > daily["reset_at"]:
+        daily["count"] = 0
+        daily["reset_at"] = now + 86400
+    if daily["count"] >= MAX_DAILY_REQUESTS:
+        return True
+
+    hourly["count"] += 1
+    daily["count"] += 1
+    return False
+
+# ── Pre-rendered limit audio ──────────────────────────────────────────────────
+with open("limit_message.pcm", "rb") as f:
+    LIMIT_AUDIO = f.read()
+
 # ── Tool filler responses ─────────────────────────────────────────────────────
+
 TOOL_FILLERS = {
-    "get_room_availability": "Sure, let me check room availability for you...",
-    "get_distance_to_homestay":        "Let me look up the distance for you...",
-    "rag_tool":    "Let me pull up that information for you...",
+    "get_room_availability": [
+        "Sure, let me check room availability for you...",
+        "Let me look that up for you...",
+        "Give me a moment to check the rooms...",
+        "Checking availability right now...",
+        "Let me see what we have available...",
+    ],
+    "get_distance_to_homestay": [
+        "Let me look up the distance for you...",
+        "Let me calculate that for you...",
+        "Give me a second to check the directions...",
+        "Let me find that out for you...",
+        "Checking the distance right now...",
+    ],
+    "rag_tool": [
+        "Let me pull up that information for you...",
+        "Give me a moment to look into that...",
+        "Let me find the details for you...",
+        "I'll look that up right away...",
+        "Let me check our information on that...",
+    ],
 }
-DEFAULT_FILLER = "Give me just a moment..."
+
+DEFAULT_FILLERS = [
+    "Give me just a moment...",
+    "Let me look into that...",
+    "One moment please...",
+    "Let me check that for you...",
+    "Give me a second...",
+]
 
 # ── Initialise TTS client once ────────────────────────────────────────────────
 init_tts(CARTESIA_API_KEY)
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 with open(os.path.join(os.path.dirname(__file__), "voice_ui.html"), encoding="utf-8") as f:
     HTML = f.read()
@@ -63,6 +145,26 @@ def clean(text: str) -> str:
 _SENT_RE = re.compile(r'(?<=[.!?])\s+')
 
 
+def fix_broken_graph_state(thread_id: str):
+    
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        state = graph.get_state(config)
+        messages = state.values.get("messages", [])
+        if not messages:
+            return
+        last = messages[-1]
+        if hasattr(last, "tool_calls") and last.tool_calls:
+            for tool_call in last.tool_calls:
+                graph.update_state(config, {
+                    "messages": [ToolMessage(
+                        content="Request was interrupted by user.",
+                        tool_call_id=tool_call["id"]
+                    )]
+                })
+            print("[GRAPH] repaired incomplete tool calls")
+    except Exception as e:
+        print(f"[GRAPH] state fix failed: {e}")
 # ── LLM sentence streamer (runs in executor thread) ───────────────────────────
 def stream_graph_sentences(
     transcript: str,
@@ -87,8 +189,8 @@ def stream_graph_sentences(
                     if getattr(chunk, "tool_calls", None):
                         if not filler_sent:
                             tool_name = chunk.tool_calls[0].get("name", "")
-                            filler = TOOL_FILLERS.get(tool_name, DEFAULT_FILLER)
-                            sentence_q.put(filler)
+                            fillers = TOOL_FILLERS.get(tool_name, DEFAULT_FILLERS)
+                            sentence_q.put(random.choice(fillers))
                             filler_sent = True
 
                         # DO NOT append content, but also DO NOT skip processing entirely
@@ -124,11 +226,23 @@ def stream_graph_sentences(
 async def websocket_endpoint(browser_ws: WebSocket):
     await browser_ws.accept()
 
+    client_ip = browser_ws.client.host
+
+    if ip_connections[client_ip] >= MAX_CONCURRENT_PER_IP:
+        await browser_ws.close(code=1008)  # policy violation
+        return
+    
+
+
+
+    ip_connections[client_ip] += 1
+
     thread_id    = f"web-{id(browser_ws)}"
     bot_speaking = asyncio.Event()
     cancel_event = asyncio.Event()
-    audio_queue  = asyncio.Queue()
+    audio_queue = asyncio.Queue(maxsize=50)
     current_task = [None]
+
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -143,12 +257,69 @@ async def websocket_endpoint(browser_ws: WebSocket):
             await browser_ws.send_bytes(data)
         except Exception:
             pass
+###########Cancel Function##########################
+    async def cancel_current():
+        cancel_event.set()
+        bot_speaking.clear()
+        task = current_task[0]
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        await asyncio.get_running_loop().run_in_executor(
+            None, fix_broken_graph_state, thread_id
+        )
 
+ ####-----------BARGE-IN HANDLER: cancels LLM + TTS, sends barge_in event to browser       
+    async def handle_barge_in():
+        await cancel_current()
+        await send_json({"type": "barge_in"})
+        print("[BARGE-IN] User interrupted the bot.")
+
+    
+    async def _speak_limit(message_audio: bytes):
+        sid = str(uuid.uuid4())
+        bot_speaking.set()
+        await send_json({"type": "audio_start", "session_id": sid})
+        # send in chunks so it behaves like normal streaming
+        chunk_size = 4800  # 100ms at 24000hz pcm_s16le
+        for i in range(0, len(message_audio), chunk_size):
+            await send_bytes_ws(message_audio[i:i + chunk_size])
+        await send_json({"type": "audio_end", "session_id": sid})
+        bot_speaking.clear()
+
+
+
+
+
+    async def handle_transcript(transcript: str):
+        if is_ip_limit_reached(client_ip):
+            await _speak_limit(LIMIT_AUDIO)
+            return
+
+        session_requests[thread_id] += 1
+        if session_requests[thread_id] > MAX_REQUESTS_PER_SESSION:
+            await _speak_limit(LIMIT_AUDIO)
+            await asyncio.sleep(3)
+            await browser_ws.close(code=1008)
+            return
+
+        if current_task[0] and not current_task[0].done():
+            await cancel_current()
+            await send_json({"type": "barge_in"})
+        cancel_event.clear()
+        current_task[0] = asyncio.create_task(process_transcript(transcript))
+
+
+    
     # ── LLM + TTS pipeline ────────────────────────────────────────────────────
 
     async def process_transcript(transcript: str):
+        
         sid  = str(uuid.uuid4())
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         cancel_event.clear()
 
         await send_json({"type": "transcript", "text": transcript})
@@ -186,32 +357,20 @@ async def websocket_endpoint(browser_ws: WebSocket):
             full_response = " ".join(full_parts)
             await send_json({"type": "response", "text": full_response})
 
-        await send_json({"type": "audio_end", "session_id": sid})
-
-    async def handle_transcript(transcript: str):
-        if current_task[0] and not current_task[0].done():
-            cancel_event.set()
-            bot_speaking.clear()
-            current_task[0].cancel()
-            try:
-                await current_task[0]
-            except asyncio.CancelledError:
-                pass
-            await send_json({"type": "barge_in"})
-        cancel_event.clear()
-        current_task[0] = asyncio.create_task(process_transcript(transcript))
+            await send_json({"type": "audio_end", "session_id": sid})
 
     # ── STT session ───────────────────────────────────────────────────────────
-
+    async def on_interim(text):
+        await send_json({"type": "interim", "text": text})
+    
     stt = STTSession(
         api_key=SARVAM_API_KEY,
         on_transcript=handle_transcript,
-        on_interim=lambda text: send_json({"type": "interim", "text": text}),
-        on_barge_in=lambda: send_json({"type": "barge_in"}),
+        on_interim=on_interim,
+        on_barge_in=handle_barge_in,
     )
-
     async def stt_loop():
-        await stt.run(audio_queue, bot_speaking, cancel_event, current_task)
+        await stt.run(audio_queue, bot_speaking)
 
     # ── Browser message receiver ──────────────────────────────────────────────
 
@@ -221,6 +380,12 @@ async def websocket_endpoint(browser_ws: WebSocket):
             if msg.get("type") == "websocket.disconnect":
                 raise WebSocketDisconnect()
             if msg.get("bytes"):
+                if audio_queue.full():
+                    try:
+                        audio_queue.get_nowait()  # remove oldest
+                    except asyncio.QueueEmpty:
+                        pass
+            
                 await audio_queue.put(msg["bytes"])
 
     # ── Run everything ────────────────────────────────────────────────────────
@@ -233,6 +398,8 @@ async def websocket_endpoint(browser_ws: WebSocket):
         if current_task[0] and not current_task[0].done():
             current_task[0].cancel()
         await audio_queue.put(None)
+        ip_connections[client_ip] -= 1
+        session_requests.pop(thread_id, None)
 
 
 if __name__ == "__main__":
