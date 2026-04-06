@@ -12,7 +12,7 @@ import uuid
 import random
 from collections import defaultdict
 import time
-
+import logging
 from langchain_core.messages import ToolMessage
 from dotenv import load_dotenv
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -48,7 +48,7 @@ ip_daily_requests  = defaultdict(lambda: {"count": 0, "reset_at": time.time() + 
 
 MAX_CONCURRENT_PER_IP    = 3
 MAX_REQUESTS_PER_SESSION = 50
-MAX_HOURLY_REQUESTS      = 20
+MAX_HOURLY_REQUESTS      = 40
 MAX_DAILY_REQUESTS       = 100
 
 # ── Rate limit helper ─────────────────────────────────────────────────────────
@@ -60,6 +60,7 @@ def is_ip_limit_reached(ip: str) -> bool:
         hourly["count"] = 0
         hourly["reset_at"] = now + 3600
     if hourly["count"] >= MAX_HOURLY_REQUESTS:
+        logging.warning(f"IP {ip} hit hourly limit")
         return True
 
     daily = ip_daily_requests[ip]
@@ -67,6 +68,7 @@ def is_ip_limit_reached(ip: str) -> bool:
         daily["count"] = 0
         daily["reset_at"] = now + 86400
     if daily["count"] >= MAX_DAILY_REQUESTS:
+        logging.warning(f"IP {ip} hit daily limit")
         return True
 
     hourly["count"] += 1
@@ -134,9 +136,9 @@ def fix_broken_graph_state(thread_id: str):
                         tool_call_id=tool_call["id"]
                     )]
                 })
-            print("[GRAPH] repaired incomplete tool calls")
+            logging.info(f"[GRAPH] Repaired state for thread {thread_id} after interruption.")
     except Exception as e:
-        print(f"[GRAPH] state fix failed: {e}")
+        logging.error(f"[GRAPH] state fix failed: {e}")
 
 # ── LLM sentence streamer ─────────────────────────────────────────────────────
 def stream_graph_sentences(
@@ -236,7 +238,7 @@ async def websocket_endpoint(browser_ws: WebSocket):
     async def handle_barge_in():
         await cancel_current()
         await send_json({"type": "barge_in"})
-        print("[BARGE-IN] User interrupted the bot.")
+        logging.info("[BARGE-IN] User interrupted the bot.")
 
     async def _speak_limit(message_audio: bytes):
         sid = str(uuid.uuid4())

@@ -15,3 +15,10 @@ __pycache__/
 Thumbs.db
 
 *.json
+
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+Databases/
+database/
+databases/

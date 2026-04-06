@@ -4,6 +4,7 @@ Single persistent WS connection per turn, sentences pushed as they arrive.
 """
 
 import asyncio
+import logging
 import queue as _q
 import re
 
@@ -74,7 +75,7 @@ def _ws_tts_worker(
                 if cancel_flag.is_set():
                     break
                 collected_sentences.append(sentence) 
-                print(f"[TTS] pushing: {sentence[:60]}…")
+                logging.info(f"[TTS] new sentence: {sentence}")
                 ctx.push(sentence)
             ctx.no_more_inputs()
 

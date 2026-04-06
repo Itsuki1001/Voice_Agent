@@ -160,7 +160,7 @@ class STTSession:
             loop.create_task(_finalize())
 
         async def _finalize():
-            print("[STT] finalize fired")
+            logging.info("[STT] finalizing transcript")
             nonlocal confirmed, current, fin_handle
             text = full_text()
             confirmed.clear()
@@ -168,7 +168,7 @@ class STTSession:
             fin_handle = None
             if not text:
                 return
-            print(f"[STT] ✔ '{text}'")
+            logging.info(f"[STT] final transcript: {text}")
             await self.on_transcript(text)
 
         async for msg in ws:
@@ -186,11 +186,11 @@ class STTSession:
                         if current:                        # ← save previous sentence
                             confirmed.append(current)
                             current = ""
-                    print("[STT] ▶")
+                    logging.info("[STT] ■ START_SPEECH")
 
                 elif sig == "END_SPEECH":
                     end_speech_received = True   # ← just set a flag, nothing else
-                    print("[STT] ■")
+                    logging.info("[STT] ■ END_SPEECH")
 
             elif msg_type == "data":
                 t = (getattr(data, "transcript", "") or "").strip()
@@ -201,7 +201,7 @@ class STTSession:
                         if fin_handle:
                             fin_handle.cancel()
                         fin_handle = loop.call_later(SILENCE_HOLD, _trigger_finalize)
-                        print(f"[STT] timer started for {SILENCE_HOLD}s")
+                        logging.info(f"[STT] timer started for {SILENCE_HOLD}s")
                     else:
                         if self.on_interim:
                             loop.create_task(self.on_interim(full_text()))
@@ -217,7 +217,7 @@ if __name__ == "__main__":
     load_dotenv()
 
     async def _test():
-        print("🎤  Listening… Ctrl-C to stop\n")
+        logging.info("🎤  Listening… Ctrl-C to stop")
 
         audio_queue  = asyncio.Queue(maxsize=10)  # backpressure: drop if not consumed fast enough
         bot_speaking = asyncio.Event()
@@ -225,7 +225,7 @@ if __name__ == "__main__":
         loop= asyncio.get_running_loop()
 
         async def on_transcript(text: str):
-            print(f"\n✅  {text}\n")
+            logging.info(f"\n✅  {text}\n")
 
         stt = STTSession(
             api_key=os.getenv("SARVAM_API_KEY"),
@@ -266,4 +266,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(_test())
     except KeyboardInterrupt:
-        print("\nStopped.")
+        print("\nStoppe
