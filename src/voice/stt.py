@@ -266,4 +266,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(_test())
     except KeyboardInterrupt:
-        print("\nStoppe
+        logging.info("\nStopped.")
+        
