@@ -27,6 +27,7 @@ load_dotenv()
 SARVAM_API_KEY   = os.getenv("SARVAM_API_KEY")
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
 
+
 router = APIRouter()
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -109,7 +110,7 @@ DEFAULT_FILLERS = [
 ]
 
 # ── Initialise TTS ────────────────────────────────────────────────────────────
-init_tts(CARTESIA_API_KEY)
+init_tts(SARVAM_API_KEY)
 
 # ── Text helpers ──────────────────────────────────────────────────────────────
 def clean(text: str) -> str:
