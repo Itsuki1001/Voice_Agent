@@ -25,13 +25,13 @@ from langchain_core.documents import Document
 load_dotenv()
 
 
-DOCS_DIR = "docs"
+DOCS_DIR = "docs_saless"
 
-INDEX_PATH = str(Path(__file__).parent.parent / "index")
+INDEX_PATH = str(Path(__file__).parent.parent / "sales_index")
 
 EMBED_MODEL = "text-embedding-3-small"   # ← or "text-embedding-3-large" / "text-embedding-ada-002"
-CHUNK_SIZE = 350
-CHUNK_OVERLAP = 100
+CHUNK_SIZE = 300
+CHUNK_OVERLAP = 50
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -120,9 +120,9 @@ def build_vectorstore() -> FAISS:
         filename = doc.metadata.get("source", "unknown")
         doc.page_content = f"Source: {filename}\n\n{doc.page_content}"
 
-    faq_docs = load_faq_from_db()
+    #faq_docs = load_faq_from_db()
 
-    all_docs = docs + faq_docs
+    all_docs = docs 
 
     print(f"Indexed {len(all_docs)} documents")
 

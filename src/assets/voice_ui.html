@@ -3,20 +3,36 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pete's Inn — Voice Assistant</title>
+  <title>Pete's Inn — Voice Assistants</title>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet"/>
   <style>
     :root {
       --bg:#0e0e0e; --surface:#161616; --border:#2a2a2a;
       --gold:#c9a84c; --gold-dim:#7a6130; --text:#e8e0d0;
       --muted:#6b6358; --you:#4a9eff; --bot:#c9a84c;
+      --sales:#9b59b6; --sales-dim:#6c3483;
     }
     * { box-sizing:border-box; margin:0; padding:0; }
     body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; font-weight:300; min-height:100vh; display:flex; flex-direction:column; align-items:center; }
     header { width:100%; padding:2rem 3rem; border-bottom:1px solid var(--border); }
     header h1 { font-family:'Cormorant Garamond',serif; font-weight:300; font-size:1.6rem; letter-spacing:.08em; color:var(--gold); }
     header span { font-size:.75rem; color:var(--muted); letter-spacing:.15em; text-transform:uppercase; }
+    
+    /* Agent Selection */
+    #agent-selector { width:100%; max-width:760px; padding:2rem 1.5rem; display:flex; gap:1rem; }
+    .agent-card { flex:1; padding:1.5rem; border:1.5px solid var(--border); border-radius:8px; background:var(--surface); cursor:pointer; transition:all .3s ease; text-align:center; }
+    .agent-card:hover { border-color:var(--gold); transform:translateY(-2px); }
+    .agent-card.active { border-color:var(--gold); background:#1a1a0a; box-shadow:0 0 20px rgba(201,168,76,.15); }
+    .agent-card.sales:hover { border-color:var(--sales); }
+    .agent-card.sales.active { border-color:var(--sales); background:#1a0a1a; box-shadow:0 0 20px rgba(155,89,182,.15); }
+    .agent-card h3 { font-family:'Cormorant Garamond',serif; font-size:1.3rem; color:var(--gold); margin-bottom:.5rem; }
+    .agent-card.sales h3 { color:var(--sales); }
+    .agent-card p { font-size:.85rem; color:var(--muted); line-height:1.5; }
+    .agent-icon { font-size:2rem; margin-bottom:.5rem; }
+    
     main { width:100%; max-width:760px; flex:1; display:flex; flex-direction:column; padding:2rem 1.5rem; gap:1.5rem; }
+    main.hidden { display:none; }
+    
     #conversation { flex:1; display:flex; flex-direction:column; gap:1.2rem; min-height:300px; max-height:60vh; overflow-y:auto; }
     #conversation::-webkit-scrollbar { width:3px; }
     #conversation::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
@@ -25,6 +41,7 @@
     .msg-label { font-size:.65rem; letter-spacing:.2em; text-transform:uppercase; }
     .msg.you .msg-label { color:var(--you); }
     .msg.bot .msg-label { color:var(--bot); }
+    body.sales-mode .msg.bot .msg-label { color:var(--sales); }
     .msg-text { font-size:1rem; line-height:1.65; }
     .msg.you .msg-text { color:#a8c8ff; }
     #interim { font-size:.9rem; color:var(--muted); font-style:italic; min-height:1.4rem; }
@@ -32,29 +49,50 @@
     #status-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); transition:background .3s; }
     #status-dot.listening { background:var(--you); box-shadow:0 0 8px var(--you); animation:pulse 1.5s infinite; }
     #status-dot.thinking  { background:var(--gold); box-shadow:0 0 8px var(--gold); }
+    body.sales-mode #status-dot.thinking { background:var(--sales); box-shadow:0 0 8px var(--sales); }
     #status-dot.speaking  { background:#4ecb71; box-shadow:0 0 8px #4ecb71; animation:pulse 1s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-    #controls { display:flex; justify-content:center; padding:1rem 0 2rem; }
+    #controls { display:flex; justify-content:center; gap:1rem; padding:1rem 0 2rem; }
     #mic-btn { width:72px; height:72px; border-radius:50%; border:1.5px solid var(--gold-dim); background:var(--surface); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .25s ease; position:relative; }
+    body.sales-mode #mic-btn { border-color:var(--sales-dim); }
     #mic-btn:hover { border-color:var(--gold); transform:scale(1.05); }
+    body.sales-mode #mic-btn:hover { border-color:var(--sales); }
     #mic-btn.active { border-color:var(--you); background:#0a1a2e; box-shadow:0 0 24px rgba(74,158,255,.25); }
     #mic-btn svg { width:26px; height:26px; }
     #mic-btn .ring { position:absolute; inset:-8px; border-radius:50%; border:1px solid var(--you); opacity:0; }
     #mic-btn.active .ring { opacity:.4; animation:ring-pulse 2s infinite; }
     @keyframes ring-pulse { 0%{transform:scale(1);opacity:.4} 100%{transform:scale(1.3);opacity:0} }
+    #back-btn { padding:.6rem 1.2rem; border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:6px; cursor:pointer; font-size:.85rem; transition:all .3s; }
+    #back-btn:hover { border-color:var(--gold); }
     #waveform { width:100%; height:48px; }
   </style>
 </head>
 <body>
 <header>
   <h1>Pete's Inn</h1>
-  <span>Voice Assistant</span>
+  <span>Voice Assistants</span>
 </header>
-<main>
+
+<!-- Agent Selection Screen -->
+<div id="agent-selector">
+  <div class="agent-card" onclick="selectAgent('resort')">
+    <div class="agent-icon">🏨</div>
+    <h3>Resort Assistant</h3>
+    <p>Book rooms, check availability, and get information about Pete's Inn resort</p>
+  </div>
+  <div class="agent-card sales" onclick="selectAgent('sales')">
+    <div class="agent-icon">💼</div>
+    <h3>Zia - Sales Assistant</h3>
+    <p>Convert leads, handle enquiries, and manage customer conversations</p>
+  </div>
+</div>
+
+<!-- Main Chat Interface (hidden initially) -->
+<main id="chat-interface" class="hidden">
   <div id="conversation">
     <div class="msg bot">
       <div class="msg-label">Assistant</div>
-      <div class="msg-text">Hello! I'm your voice assistant for Pete's Inn. Press the mic and ask me anything.</div>
+      <div class="msg-text" id="welcome-message">Hello! I'm your assistant. Press the mic and ask me anything.</div>
     </div>
   </div>
   <div id="interim"></div>
@@ -64,6 +102,7 @@
     <span id="status-text">Press mic to start</span>
   </div>
   <div id="controls">
+    <button id="back-btn" onclick="backToSelection()">← Change Agent</button>
     <button id="mic-btn" onclick="toggleMic()">
       <div class="ring"></div>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -83,10 +122,17 @@ let mediaStream = null;
 let processor   = null;
 let audioCtx    = null;
 let isListening = false;
+let currentAgent = null; // 'resort' or 'sales'
+
+// Welcome messages for each agent
+const WELCOME_MESSAGES = {
+  resort: "Hello! I'm your assistant for Pete's Inn. Press the mic to ask about rooms, availability, or anything else.",
+  sales: "Hey, I'm Zia. I help businesses handle customer enquiries instantly and convert more leads. Press the mic to start!"
+};
 
 // ── Streaming audio playback with INSTANT stop capability ─────────
 let playCtx       = null;
-let activeSources = [];  // Track all active sources for instant stop
+let activeSources = [];
 let nextStartTime = 0;
 let playing       = false;
 
@@ -102,18 +148,14 @@ function getPlayCtx() {
 function stopAudio() {
   console.log('[AUDIO] Stopping immediately - killing all sources');
   
-  // Stop all currently playing/scheduled sources IMMEDIATELY
   activeSources.forEach(src => {
     try {
       src.stop();
       src.disconnect();
-    } catch (e) {
-      // Already stopped/disconnected
-    }
+    } catch (e) {}
   });
   activeSources = [];
   
-  // Close and recreate context for clean slate
   if (playCtx && playCtx.state !== 'closed') {
     playCtx.close().catch(() => {});
     playCtx = null;
@@ -142,31 +184,75 @@ function scheduleChunk(pcmBytes) {
   src.buffer = buf;
   src.connect(ctx.destination);
 
-  // Track this source so we can stop it on barge-in
   activeSources.push(src);
   
-  // Remove from tracking when it ends naturally
   src.onended = () => {
     const idx = activeSources.indexOf(src);
     if (idx > -1) activeSources.splice(idx, 1);
   };
 
-  // Schedule back-to-back
   const now = ctx.currentTime;
   if (nextStartTime < now) nextStartTime = now + 0.02;
   src.start(nextStartTime);
   nextStartTime += buf.duration;
 }
 
+// ── Agent Selection ────────────────────────────────────────────────
+function selectAgent(agent) {
+  currentAgent = agent;
+  
+  // Update UI
+  document.getElementById('agent-selector').style.display = 'none';
+  document.getElementById('chat-interface').classList.remove('hidden');
+  
+  // Update welcome message
+  document.getElementById('welcome-message').textContent = WELCOME_MESSAGES[agent];
+  
+  // Apply theme
+  if (agent === 'sales') {
+    document.body.classList.add('sales-mode');
+  } else {
+    document.body.classList.remove('sales-mode');
+  }
+  
+  console.log(`[AGENT] Selected: ${agent}`);
+}
+
+function backToSelection() {
+  // Stop current session
+  if (isListening) {
+    stopMic();
+  }
+  
+  // Reset UI
+  document.getElementById('agent-selector').style.display = 'flex';
+  document.getElementById('chat-interface').classList.add('hidden');
+  
+  // Clear conversation
+  const conv = document.getElementById('conversation');
+  conv.innerHTML = `
+    <div class="msg bot">
+      <div class="msg-label">Assistant</div>
+      <div class="msg-text" id="welcome-message">Hello! I'm your assistant. Press the mic and ask me anything.</div>
+    </div>
+  `;
+  
+  document.getElementById('interim').textContent = '';
+  currentAgent = null;
+}
+
 // ── WebSocket ──────────────────────────────────────────────────────
 function connectWS() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+  const endpoint = currentAgent === 'sales' ? '/ws/sales' : '/ws/resort';
+  
+  ws = new WebSocket(`${proto}//${window.location.host}${endpoint}`);
   ws.binaryType = 'arraybuffer';
 
   ws.onopen  = () => { 
     setStatus('listening', 'Listening...'); 
-    document.getElementById('mic-btn').classList.add('active'); 
+    document.getElementById('mic-btn').classList.add('active');
+    console.log(`[WS] Connected to ${endpoint}`);
   };
   
   ws.onclose = () => { 
@@ -181,7 +267,7 @@ function connectWS() {
   };
 
   ws.onmessage = (event) => {
-    // Binary = PCM audio chunk → schedule immediately
+    // Binary = PCM audio chunk
     if (event.data instanceof ArrayBuffer) {
       if (playing) {
         scheduleChunk(event.data);
@@ -205,23 +291,20 @@ function connectWS() {
       addMessage('bot', msg.text);
     }
     else if (msg.type === 'audio_start') {
-      // Prepare for streaming audio - clear any previous
       stopAudio();
       playing = true;
       setStatus('speaking', 'Speaking...');
       console.log('[AUDIO] Started receiving audio');
     }
     else if (msg.type === 'audio_end') {
-      // Natural end of speech
       playing = false;
       console.log('[AUDIO] Received audio_end signal');
       
-      // Wait for any scheduled audio to finish, then update status
       const ctx = playCtx;
       if (ctx && nextStartTime > ctx.currentTime) {
         const remaining = nextStartTime - ctx.currentTime;
         setTimeout(() => {
-          if (!playing) {  // Only update if we haven't started new audio
+          if (!playing) {
             setStatus('listening', 'Listening...');
           }
         }, remaining * 1000 + 100);
@@ -230,10 +313,9 @@ function connectWS() {
       }
     }
     else if (msg.type === 'barge_in') {
-      // CRITICAL: Stop audio IMMEDIATELY on barge-in
       console.log('[BARGE-IN] Received - stopping audio NOW');
       playing = false;
-      stopAudio();  // This kills all scheduled audio instantly
+      stopAudio();
       setStatus('listening', 'Listening...');
       document.getElementById('interim').textContent = '';
     }

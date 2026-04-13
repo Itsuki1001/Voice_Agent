@@ -20,9 +20,9 @@ from langchain_core.messages import (
 from langchain_core.messages.utils import trim_messages, count_tokens_approximately
 from langchain_core.runnables import RunnableConfig
 
-from .tools_voice import tools
+from .tools_sales_voice import tools
 from .memory import memory
-from prompts.prompt_voice import get_system_prompt
+from prompts.prompt_voice_sales import get_system_prompt
 
 # -------------------------------------------------------------------
 # SETUP

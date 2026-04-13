@@ -1,10 +1,9 @@
 import os
 import logging
 from typing import Annotated, TypedDict
-import httpx
-import atexit
-import asyncio
+
 from dotenv import load_dotenv
+import httpx
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START
@@ -20,9 +19,9 @@ from langchain_core.messages import (
 from langchain_core.messages.utils import trim_messages, count_tokens_approximately
 from langchain_core.runnables import RunnableConfig
 
-from .tools_voice import tools
+from .tools_whatsapp import tools
 from .memory import memory
-from prompts.prompt_voice import get_system_prompt
+from prompts.prompt_chat import get_system_prompt
 
 # -------------------------------------------------------------------
 # SETUP
@@ -51,20 +50,11 @@ os.environ["LANGCHAIN_PROJECT"] = "Production - Petes Inn Resort"
 # -------------------------------------------------------------------
 # LLM
 # -------------------------------------------------------------------
-
-_http_client = httpx.AsyncClient(
-    limits=httpx.Limits(
-        max_connections=10,
-        max_keepalive_connections=5,
-        keepalive_expiry=30,
-    ),
-    timeout=httpx.Timeout(
-        connect=5.0,
-        read=TIMEOUT,
-        write=10.0,
-        pool=5.0,
-    ),
+_http_client = httpx.Client(
+    limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+    timeout=httpx.Timeout(30.0),
 )
+
 
 
 llm = ChatOpenAI(
@@ -74,17 +64,9 @@ llm = ChatOpenAI(
     timeout=TIMEOUT,
     max_retries=2,
     max_tokens=500,
-    http_async_client=_http_client,
+    http_client=_http_client,
 )
 llm_with_tools = llm.bind_tools(tools)
-
-def _cleanup():
-    try:
-        asyncio.run(_http_client.aclose())
-    except Exception:
-        pass
-
-atexit.register(_cleanup)
 
 # -------------------------------------------------------------------
 # STATE
@@ -141,23 +123,23 @@ def llm_node(state: State, config: RunnableConfig) -> State:
             }
         
         # Filter first, then trim
-        
+        clean = filter_messages(state["messages"])
         
         trimmed = trim_messages(
-            state["messages"],
+            clean,
             strategy="last",
             token_counter=count_tokens_approximately,
             max_tokens=MAX_TOKENS,
             start_on="human",
             end_on=("human", "tool"),
         )
-        clean = filter_messages(trimmed)
+        
 
         
         
         # Add system prompt
-        system_prompt = get_system_prompt()
-        conversation = [SystemMessage(content=system_prompt)] + clean
+        system_prompt = get_system_prompt(sender_id)
+        conversation = [SystemMessage(content=system_prompt)] + trimmed
         
         # Log token usage
         tokens = count_tokens_approximately(conversation)
@@ -170,20 +152,12 @@ def llm_node(state: State, config: RunnableConfig) -> State:
         
         return {"messages": [response]}
     
-    except httpx.TimeoutException:
-        logger.error(f"OpenAI timeout for {sender_id} after {TIMEOUT}s")
-        return {"messages": [AIMessage(content="Sorry, the request timed out. Please try again.")]}
-    
-    except httpx.ConnectError:
-        logger.error(f"OpenAI connection failed for {sender_id}")
-        return {"messages": [AIMessage(content="Connection issue. Please try again.")]}
-
-    except httpx.HTTPStatusError as e:
-        logger.error(f"OpenAI HTTP error for {sender_id}: {e.response.status_code}")
-        return {"messages": [AIMessage(content="Service error. Please try again.")]}
+    except TimeoutError:
+        logger.error(f"Timeout for {sender_id}")
+        return {"messages": [AIMessage(content="Request timed out. Try again?")]}
     
     except Exception as e:
-        logger.error(f"Unexpected error for {sender_id}: {type(e).__name__}: {e}")
+        logger.error(f"Error: {type(e).__name__}: {e}")
         return {"messages": [AIMessage(content="An error occurred. Please try again.")]}
 
 # -------------------------------------------------------------------

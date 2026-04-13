@@ -1,0 +1,11 @@
+This product is an AI-powered voice and WhatsApp assistant designed to handle customer conversations like a real sales and support team member.
+It can answer calls, reply to messages instantly, qualify leads, and guide customers toward bookings or purchases without delay.
+The system works 24/7 and ensures that no enquiry is missed, even during busy hours or outside working time.
+It is not just a chatbot. The assistant can remember previous interactions, understand customer context, and continue conversations naturally instead of starting from scratch every time.
+It supports custom automations based on business needs. For example, it can book appointments, send follow-ups, collect customer details, or trigger specific workflows automatically.
+The assistant can integrate with external tools such as CRM systems, booking platforms, and internal databases to manage leads and customer data in real time.
+It can also connect with business workflows, allowing actions like updating records, scheduling services, or sending confirmations without manual effort.
+If needed, the system supports seamless human handoff. When a conversation becomes complex or high-value, it can transfer the interaction to a real person without breaking context.
+The goal is not just to respond, but to convert. The assistant is designed to increase lead conversion, reduce response time, and improve overall customer experience.
+By handling repetitive communication and ensuring fast responses, it helps businesses capture more opportunities, reduce operational load, and generate more revenue.
+It acts like a trained employee that never misses a lead, never delays a response, and consistently works to convert enquiries into customers.

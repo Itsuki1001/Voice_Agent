@@ -1,11 +1,18 @@
 AMENITIES:
-- Free Wi-Fi
-- Free private parking
-- Shared or private kitchen
-- Garden and outdoor sitting areas
-- AC rooms with hot water and clean linens
-- Living/dining common area
-
-FOOD:
-- Self cooking allowed
-- Food delivery supported
+* WiFi Password: 12345678
+* Private Beach Access
+* Infinity Swimming Pool
+* Ayurvedic Spa & Wellness Center
+* Complimentary Breakfast
+* High-Speed WiFi
+* 24/7 Room Service
+* Beachside Restaurant & Café
+* Sunset Deck Lounge
+* Yoga & Meditation Sessions
+* Campfire & Live Music Nights
+* Free Parking
+* Travel & Tour Assistance
+* Airport Pickup & Drop (on request)
+* Laundry & Dry Cleaning Services
+* Indoor Games (Carrom, Chess, Board Games)
+* Outdoor Activities (Volleyball, Cycling)

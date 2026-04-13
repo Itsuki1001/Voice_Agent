@@ -100,7 +100,7 @@ class STTSession:
         async with self._sarvam.speech_to_text_streaming.connect(
             model="saaras:v3",
             mode="transcribe",
-            language_code="unknown",
+            language_code="unknown",  # auto-detect
             high_vad_sensitivity=True,
             vad_signals=True,
         ) as ws:

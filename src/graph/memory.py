@@ -4,15 +4,16 @@ import base64
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.serde.encrypted import EncryptedSerializer
 from dotenv import load_dotenv
-
+from pathlib import Path
 load_dotenv()
 
+#  Absolute base path (fixes your path issues)
+BASE_DIR = Path(__file__).resolve().parent.parent   # goes to src/
+
 def setup_memory():
-    # 1. Ensure the directory exists
-    db_dir = "Databases"
-    if not os.path.exists(db_dir):
-        os.makedirs(db_dir)
-        print(f"Directory created: {db_dir}")
+    # 1. Ensure DB directory exists (absolute, not relative)
+    db_dir = os.path.join(BASE_DIR, "Databases")
+    os.makedirs(db_dir, exist_ok=True)
 
     # 2. Setup Encryption
     key_b64 = os.getenv("ENCRYPTION_KEY")
@@ -20,18 +21,48 @@ def setup_memory():
         raise ValueError("ENCRYPTION_KEY not found in environment variables")
     
     key = base64.b64decode(key_b64)
-    # Using the pycryptodome AES serializer as per your snippet
     serde = EncryptedSerializer.from_pycryptodome_aes(key=key)
 
-    # 3. Connect to SQLite
-    # Tip: Using "/" is safer across all OS types (Windows/Mac/Linux)
+    # 3. SQLite path (stable now)
     db_path = os.path.join(db_dir, "petesinn.sqlite")
+
+    # 4. Connect
     sqlite_conn = sqlite3.connect(db_path, check_same_thread=False)
 
-    # 4. Performance Optimizations
+    # 5. Performance tweaks
     sqlite_conn.execute("PRAGMA journal_mode=WAL;")
     sqlite_conn.execute("PRAGMA synchronous=NORMAL;")
 
-    return SqliteSaver(sqlite_conn, serde=serde)
+    # 6.  Create FAQ table (so you can reuse same DB)
+    sqlite_conn.execute("""
+        CREATE TABLE IF NOT EXISTS faq (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question TEXT,
+            answer TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    sqlite_conn.execute("""
+        CREATE TABLE IF NOT EXISTS handoffs (
+            id TEXT PRIMARY KEY,
+            phone TEXT,
+            message TEXT
+        )
+                        
+    """)
+    sqlite_conn.execute("""
+    CREATE TABLE IF NOT EXISTS processed(
+        id TEXT PRIMARY KEY
+    )
+    """)
 
-memory = setup_memory()
+    sqlite_conn.commit()
+
+    # 7. LangGraph memory
+    memory = SqliteSaver(sqlite_conn, serde=serde)
+
+    return memory, sqlite_conn
+
+
+#  Initialize once
+memory, conn = setup_memory()
