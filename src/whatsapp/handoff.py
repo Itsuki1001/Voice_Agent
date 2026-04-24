@@ -10,7 +10,7 @@ from .state import save_handoff, get_handoff, delete_handoff
 # HANDOFF CONFIG
 # --------------------------------------------------
 
-DEFAULT_HUMAN_PHONE = "919061293580"
+DEFAULT_HUMAN_PHONE = "918606842144"
 HANDOFF_STORE = {}
 
 # --------------------------------------------------
@@ -44,7 +44,7 @@ Question:
 "{user_message}"
 
 Reply as:
-ANSWER {handoff_id}: <your reply>
+ANSWER {handoff_id}: 
 """
     )
 

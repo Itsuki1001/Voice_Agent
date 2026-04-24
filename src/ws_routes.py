@@ -14,7 +14,7 @@ import random
 from collections import defaultdict
 import time
 import logging
-from langchain_core.messages import ToolMessage,AIMessage
+from langchain_core.messages import ToolMessage, AIMessage
 from dotenv import load_dotenv
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -23,6 +23,7 @@ from voice.stt import STTSession
 from voice.tts import TTSSentenceStreamer, init_tts
 from graph.graph_sales_voice import graph as sales_graph
 from graph.graph_voice import graph as resort_graph
+from graph.graph_customer_support import graph as support_graph
 
 load_dotenv()
 
@@ -45,6 +46,9 @@ with open("assets//greeting_resort.pcm", "rb") as f:
 with open("assets//greeting_sales.pcm", "rb") as f:
     SALES_GREETING_AUDIO = f.read()
 
+with open("assets//greeting_support.pcm", "rb") as f:
+    SUPPORT_GREETING_AUDIO = f.read()
+
 # ── HTML ──────────────────────────────────────────────────────────────────────
 with open("assets//voice_ui.html", encoding="utf-8") as f:
     HTML = f.read()
@@ -59,6 +63,11 @@ MAX_CONCURRENT_PER_IP    = 3
 MAX_REQUESTS_PER_SESSION = 100
 MAX_HOURLY_REQUESTS      = 100
 MAX_DAILY_REQUESTS       = 100
+
+
+RESORT_VOICE_ID = "f786b574-daa5-4673-aa0c-cbe3e8534c02"  
+SALES_VOICE_ID  = "228fca29-3a0a-435c-8728-5cb483251068"
+SUPPORT_VOICE_ID = "6ccbfb76-1fc6-48f7-b71d-91ac6298247b"
 
 # ── Rate limit helper ─────────────────────────────────────────────────────────
 def is_ip_limit_reached(ip: str) -> bool:
@@ -306,6 +315,56 @@ SALES_DEFAULT_FILLERS: dict[str, list[str]] = {
     "ta": ["ஒரு நிமிடம்...", "பார்க்கிறேன்..."],
 }
 
+##############  CUSTOMER SUPPORT AGENT FILLERS ##############
+
+SUPPORT_FILLERS: dict[str, dict[str, list[str]]] = {
+    "get_order_details": {
+        "en": [
+            "Let me check your order details...",
+            "Give me a moment to pull up your order...",
+        ]
+    },
+    "check_refund_eligibility": {
+        "en": [
+            "Let me check if you're eligible for a refund...",
+            "I'll quickly verify that for you...",
+        ]
+    },
+    "initiate_return_pickup": {
+        "en": [
+            "Let me arrange a pickup for you...",
+            "I'll schedule the return pickup now...",
+        ]
+    },
+    "initiate_refund": {
+        "en": [
+            "Processing your refund now...",
+            "Let me initiate that refund for you...",
+        ]
+    },
+    "product_support_rag": {
+        "en": [
+            "Let me check that for you...",
+            "Give me a moment to find a solution...",
+        ]
+    },
+    "create_support_ticket": {
+        "en": [
+            "Let me raise a support ticket for this...",
+            "I'll log this issue for you...",
+        ]
+    },
+    "escalate_to_human": {
+        "en": [
+            "Let me connect you to a specialist...",
+            "I'll transfer you to our support team...",
+        ]
+    },
+}
+
+SUPPORT_DEFAULT_FILLERS = {
+    "en": ["One moment please...", "Let me check that..."]
+}
 
 # ── Filler getter functions ───────────────────────────────────────────────────
 def get_resort_filler(tool_name: str, lang: str) -> str:
@@ -331,6 +390,16 @@ def get_sales_filler(tool_name: str, lang: str) -> str:
     )
     return random.choice(options)
 
+
+def get_support_filler(tool_name: str, lang: str) -> str:
+    tool_map = SUPPORT_FILLERS.get(tool_name, {})
+    options = (
+        tool_map.get(lang)
+        or tool_map.get("en")
+        or SUPPORT_DEFAULT_FILLERS.get(lang)
+        or SUPPORT_DEFAULT_FILLERS["en"]
+    )
+    return random.choice(options)
 
 # ── Initialise TTS ────────────────────────────────────────────────────────────
 init_tts(CARTESIA_API_KEY)
@@ -378,9 +447,6 @@ def stream_graph_sentences(
 ):
     """Stream sentences from graph, with agent-specific filler function."""
     config = {"configurable": {"thread_id": thread_id}}
-    sales_graph.update_state(
-        config,
-        {"messages": [AIMessage(content="Hey, I'm Zia. I help businesses handle customer enquiries instantly and convert more leads. Just curious — how are you currently managing your incoming messages or calls?")]})
     buffer = ""
     filler_sent = False
 
@@ -427,6 +493,7 @@ async def websocket_handler(
     greeting_audio: bytes,
     greeting_message: str,
     filler_getter_fn,
+    voice_id: str
 ):
     """Generic WebSocket handler for both resort and sales agents."""
     await browser_ws.accept()
@@ -444,11 +511,11 @@ async def websocket_handler(
     cancel_event = asyncio.Event()
     audio_queue  = asyncio.Queue(maxsize=50)
     current_task = [None]
+    
+    # Initialize graph state with greeting message
     if greeting_message:
-        
         config = {"configurable": {"thread_id": thread_id}}
         try:
-
             graph_instance.update_state(
                 config,
                 {"messages": [AIMessage(content=greeting_message)]})
@@ -545,7 +612,7 @@ async def websocket_handler(
             filler_getter_fn,
         )
 
-        tts_streamer = TTSSentenceStreamer(on_audio_chunk=send_bytes_ws)
+        tts_streamer = TTSSentenceStreamer(on_audio_chunk=send_bytes_ws, voice_id=voice_id)
 
         try:
             _, full_parts = await asyncio.gather(
@@ -574,6 +641,7 @@ async def websocket_handler(
         on_barge_in=handle_barge_in,
     )
     
+    # Send greeting audio after STT is initialized
     await custom_speech(greeting_audio)
 
     async def stt_loop():
@@ -619,7 +687,8 @@ async def websocket_resort_endpoint(browser_ws: WebSocket):
         thread_prefix="resort",
         greeting_audio=RESORT_GREETING_AUDIO,
         filler_getter_fn=get_resort_filler,
-        greeting_message="Hi, this is Acsa from Paradise Resort Cherai. How can I help you?"
+        greeting_message="Hi, this is Acsa from Paradise Resort Cherai. How can I help you?",
+        voice_id=RESORT_VOICE_ID
     )
 
 
@@ -632,5 +701,18 @@ async def websocket_sales_endpoint(browser_ws: WebSocket):
         thread_prefix="sales",
         greeting_audio=SALES_GREETING_AUDIO,
         filler_getter_fn=get_sales_filler,
-        greeting_message="Hey, I’m Zia. I help businesses handle customer enquiries instantly and convert more leads.Just curious — how are you currently managing your incoming messages or calls?"
+        greeting_message="Hey, I'm Alex. I help businesses handle customer enquiries instantly and convert more leads. Just curious — how are you currently managing your incoming messages or calls?",
+        voice_id=SALES_VOICE_ID
+    )
+
+@router.websocket("/ws/support")
+async def websocket_support_endpoint(browser_ws: WebSocket):
+    await websocket_handler(
+        browser_ws=browser_ws,
+        graph_instance=support_graph,
+        thread_prefix="support",
+        greeting_audio=SUPPORT_GREETING_AUDIO,  # reuse for now
+        filler_getter_fn=get_support_filler,
+        greeting_message="Hey, this is Riya from support. What can I help you with today?",
+        voice_id=SUPPORT_VOICE_ID
     )

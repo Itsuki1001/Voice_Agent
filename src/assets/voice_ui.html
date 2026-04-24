@@ -11,6 +11,7 @@
       --gold:#c9a84c; --gold-dim:#7a6130; --text:#e8e0d0;
       --muted:#6b6358; --you:#4a9eff; --bot:#c9a84c;
       --sales:#9b59b6; --sales-dim:#6c3483;
+      --support:#2ecc71; --support-dim:#1a7a44;
     }
     * { box-sizing:border-box; margin:0; padding:0; }
     body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; font-weight:300; min-height:100vh; display:flex; flex-direction:column; align-items:center; }
@@ -19,14 +20,17 @@
     header span { font-size:.75rem; color:var(--muted); letter-spacing:.15em; text-transform:uppercase; }
     
     /* Agent Selection */
-    #agent-selector { width:100%; max-width:760px; padding:2rem 1.5rem; display:flex; gap:1rem; }
-    .agent-card { flex:1; padding:1.5rem; border:1.5px solid var(--border); border-radius:8px; background:var(--surface); cursor:pointer; transition:all .3s ease; text-align:center; }
+    #agent-selector { width:100%; max-width:900px; padding:2rem 1.5rem; display:flex; gap:1rem; flex-wrap:wrap; }
+    .agent-card { flex:1; min-width:200px; padding:1.5rem; border:1.5px solid var(--border); border-radius:8px; background:var(--surface); cursor:pointer; transition:all .3s ease; text-align:center; }
     .agent-card:hover { border-color:var(--gold); transform:translateY(-2px); }
     .agent-card.active { border-color:var(--gold); background:#1a1a0a; box-shadow:0 0 20px rgba(201,168,76,.15); }
     .agent-card.sales:hover { border-color:var(--sales); }
     .agent-card.sales.active { border-color:var(--sales); background:#1a0a1a; box-shadow:0 0 20px rgba(155,89,182,.15); }
+    .agent-card.support:hover { border-color:var(--support); }
+    .agent-card.support.active { border-color:var(--support); background:#0a1a0f; box-shadow:0 0 20px rgba(46,204,113,.15); }
     .agent-card h3 { font-family:'Cormorant Garamond',serif; font-size:1.3rem; color:var(--gold); margin-bottom:.5rem; }
     .agent-card.sales h3 { color:var(--sales); }
+    .agent-card.support h3 { color:var(--support); }
     .agent-card p { font-size:.85rem; color:var(--muted); line-height:1.5; }
     .agent-icon { font-size:2rem; margin-bottom:.5rem; }
     
@@ -42,6 +46,7 @@
     .msg.you .msg-label { color:var(--you); }
     .msg.bot .msg-label { color:var(--bot); }
     body.sales-mode .msg.bot .msg-label { color:var(--sales); }
+    body.support-mode .msg.bot .msg-label { color:var(--support); }
     .msg-text { font-size:1rem; line-height:1.65; }
     .msg.you .msg-text { color:#a8c8ff; }
     #interim { font-size:.9rem; color:var(--muted); font-style:italic; min-height:1.4rem; }
@@ -50,13 +55,16 @@
     #status-dot.listening { background:var(--you); box-shadow:0 0 8px var(--you); animation:pulse 1.5s infinite; }
     #status-dot.thinking  { background:var(--gold); box-shadow:0 0 8px var(--gold); }
     body.sales-mode #status-dot.thinking { background:var(--sales); box-shadow:0 0 8px var(--sales); }
+    body.support-mode #status-dot.thinking { background:var(--support); box-shadow:0 0 8px var(--support); }
     #status-dot.speaking  { background:#4ecb71; box-shadow:0 0 8px #4ecb71; animation:pulse 1s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
     #controls { display:flex; justify-content:center; gap:1rem; padding:1rem 0 2rem; }
     #mic-btn { width:72px; height:72px; border-radius:50%; border:1.5px solid var(--gold-dim); background:var(--surface); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .25s ease; position:relative; }
     body.sales-mode #mic-btn { border-color:var(--sales-dim); }
+    body.support-mode #mic-btn { border-color:var(--support-dim); }
     #mic-btn:hover { border-color:var(--gold); transform:scale(1.05); }
     body.sales-mode #mic-btn:hover { border-color:var(--sales); }
+    body.support-mode #mic-btn:hover { border-color:var(--support); }
     #mic-btn.active { border-color:var(--you); background:#0a1a2e; box-shadow:0 0 24px rgba(74,158,255,.25); }
     #mic-btn svg { width:26px; height:26px; }
     #mic-btn .ring { position:absolute; inset:-8px; border-radius:50%; border:1px solid var(--you); opacity:0; }
@@ -82,8 +90,13 @@
   </div>
   <div class="agent-card sales" onclick="selectAgent('sales')">
     <div class="agent-icon">💼</div>
-    <h3>Zia - Sales Assistant</h3>
+    <h3>Alex - Sales Assistant</h3>
     <p>Convert leads, handle enquiries, and manage customer conversations</p>
+  </div>
+  <div class="agent-card support" onclick="selectAgent('support')">
+    <div class="agent-icon">🎧</div>
+    <h3>Riya - Support Assistant</h3>
+    <p>Get help with issues, troubleshoot problems, and resolve customer support requests</p>
   </div>
 </div>
 
@@ -122,12 +135,20 @@ let mediaStream = null;
 let processor   = null;
 let audioCtx    = null;
 let isListening = false;
-let currentAgent = null; // 'resort' or 'sales'
+let currentAgent = null; // 'resort', 'sales', or 'support'
 
 // Welcome messages for each agent
 const WELCOME_MESSAGES = {
   resort: "Hello! I'm your assistant for Pete's Inn. Press the mic to ask about rooms, availability, or anything else.",
-  sales: "Hey, I'm Zia. I help businesses handle customer enquiries instantly and convert more leads. Press the mic to start!"
+  sales: "Hey, I'm Alex. I help businesses handle customer enquiries instantly and convert more leads. Press the mic to start!",
+  support: "Hey, this is Riya from support. What can I help you with today? Press the mic to get started."
+};
+
+// WS endpoints for each agent
+const WS_ENDPOINTS = {
+  resort: '/ws/resort',
+  sales: '/ws/sales',
+  support: '/ws/support'
 };
 
 // ── Streaming audio playback with INSTANT stop capability ─────────
@@ -209,10 +230,11 @@ function selectAgent(agent) {
   document.getElementById('welcome-message').textContent = WELCOME_MESSAGES[agent];
   
   // Apply theme
+  document.body.classList.remove('sales-mode', 'support-mode');
   if (agent === 'sales') {
     document.body.classList.add('sales-mode');
-  } else {
-    document.body.classList.remove('sales-mode');
+  } else if (agent === 'support') {
+    document.body.classList.add('support-mode');
   }
   
   console.log(`[AGENT] Selected: ${agent}`);
@@ -238,13 +260,14 @@ function backToSelection() {
   `;
   
   document.getElementById('interim').textContent = '';
+  document.body.classList.remove('sales-mode', 'support-mode');
   currentAgent = null;
 }
 
 // ── WebSocket ──────────────────────────────────────────────────────
 function connectWS() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const endpoint = currentAgent === 'sales' ? '/ws/sales' : '/ws/resort';
+  const endpoint = WS_ENDPOINTS[currentAgent] || '/ws/resort';
   
   ws = new WebSocket(`${proto}//${window.location.host}${endpoint}`);
   ws.binaryType = 'arraybuffer';

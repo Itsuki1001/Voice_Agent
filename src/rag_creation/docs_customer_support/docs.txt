@@ -1,0 +1,232 @@
+### DOCUMENT START
+
+Title: Wireless Headphones - Product Overview
+Type: product
+
+Product: Wireless Bluetooth Headphones X200
+Category: Electronics
+
+Features:
+- Bluetooth 5.0 connectivity
+- 20-hour battery life
+- Noise cancellation
+- Touch controls
+
+Common Issues:
+- Not connecting to device
+- One side not working
+- Battery draining fast
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Headphones Not Connecting
+Type: troubleshooting
+
+Problem:
+User is unable to connect headphones via Bluetooth
+
+Solution:
+1. Turn off Bluetooth and turn it back on
+2. Reset headphones (hold power button for 10 seconds)
+3. Remove device from paired list and reconnect
+4. Ensure device is charged
+
+Keywords:
+bluetooth issue, pairing problem
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: One Side of Headphones Not Working
+Type: troubleshooting
+
+Problem:
+Audio coming only from one side
+
+Solution:
+1. Check audio balance settings
+2. Reset headphones
+3. Clean earbud mesh
+4. Test with another device
+
+Keywords:
+audio issue, one side dead
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Battery Draining Quickly
+Type: troubleshooting
+
+Problem:
+Battery drains faster than expected
+
+Solution:
+1. Disable noise cancellation
+2. Lower volume
+3. Fully charge before use
+4. Avoid charging while using
+
+Keywords:
+battery drain issue
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Men's Jacket - Product Overview
+Type: product
+
+Product: Men's Casual Jacket Z101
+Category: Clothing
+
+Features:
+- Cotton blend
+- Slim fit
+- Machine washable
+
+Common Issues:
+- Size mismatch
+- Color fading
+- Fabric discomfort
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Jacket Size Not Fitting
+Type: troubleshooting
+
+Problem:
+Size too tight or too loose
+
+Solution:
+1. Refer size chart
+2. Recommend exchange if unused
+3. Suggest correct size
+
+Keywords:
+size issue, fitting problem
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Color Fading After Wash
+Type: troubleshooting
+
+Problem:
+Color fades after washing
+
+Solution:
+1. Wash in cold water
+2. Avoid sunlight drying
+3. Use mild detergent
+4. Wash inside out
+
+Keywords:
+color fade issue
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Fabric Feels Uncomfortable
+Type: troubleshooting
+
+Problem:
+Fabric feels rough or irritating
+
+Solution:
+1. Wash before first use
+2. Use softener
+3. Exchange if needed
+
+Keywords:
+fabric irritation
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Return and Refund Policy
+Type: policy
+
+Policy:
+- Return allowed within 7 days of delivery
+- Product must be unused
+- Refund after pickup verification
+
+Refund Timeline:
+- Initiated within 24 hours
+- Credited in 5-7 days
+
+Non-Eligible:
+- Used product
+- Return after 7 days
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Order Status Meaning
+Type: faq
+
+Processing → Order confirmed
+Shipped → Dispatched
+Out for Delivery → Arriving today
+Delivered → Completed
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Order Delay Handling
+Type: faq
+
+Causes:
+- Logistics delay
+- Weather
+- High demand
+
+Action:
+- Ask to wait 1-2 days
+- Escalate if delay > 3 days
+
+### DOCUMENT END
+
+
+### DOCUMENT START
+
+Title: Complaint Resolution Rules
+Type: decision_rules
+
+Rules:
+
+Product not working within 7 days
+→ Refund or replacement
+
+Damaged on delivery
+→ Immediate replacement
+
+Size mismatch
+→ Exchange only
+
+Order not delivered
+→ Track → escalate if delayed > 3 days
+
+### DOCUMENT END

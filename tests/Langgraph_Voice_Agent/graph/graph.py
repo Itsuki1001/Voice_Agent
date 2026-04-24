@@ -20,7 +20,7 @@ from langchain_core.runnables import RunnableConfig
 
 from .tools import tools
 from .memory import memory
-from prompts.prmopt_lesstokens import get_system_prompt
+from prompts.prompt_chat import get_system_prompt
 
 # -------------------------------------------------------------------
 # SETUP

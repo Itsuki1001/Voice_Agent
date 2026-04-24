@@ -5,7 +5,7 @@ import httpx
 import atexit
 import asyncio
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START
 from langgraph.graph.message import add_messages
@@ -20,9 +20,9 @@ from langchain_core.messages import (
 from langchain_core.messages.utils import trim_messages, count_tokens_approximately
 from langchain_core.runnables import RunnableConfig
 
-from .tools_voice import tools
+from .tools_customer_support import tools
 from .memory import memory
-from prompts.prompt_voice import get_system_prompt
+from prompts.prompt_customer_support import get_system_prompt
 
 # -------------------------------------------------------------------
 # SETUP

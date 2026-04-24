@@ -11,7 +11,7 @@ import re
 from cartesia import Cartesia
 
 # ── Config ────────────────────────────────────────────────────────────────────
-VOICE_ID           = "6ccbfb76-1fc6-48f7-b71d-91ac6298247b"
+
 TTS_MODEL          = "sonic-3"
 OUTPUT_FORMAT      = {
     "container":   "raw",
@@ -47,6 +47,7 @@ def _ws_tts_worker(
     cancel_flag: asyncio.Event,
     loop: asyncio.AbstractEventLoop,
     collected_sentences: list, 
+    voice_id: str, 
 ):
     """
     Blocking worker — runs in a thread via run_in_executor.
@@ -57,7 +58,7 @@ def _ws_tts_worker(
     with _cartesia.tts.websocket_connect() as connection:
         ctx = connection.context(
             model_id=TTS_MODEL,
-            voice={"mode": "id", "id": VOICE_ID},
+            voice={"mode": "id", "id": voice_id},
             output_format=OUTPUT_FORMAT,
         )
 
@@ -99,8 +100,9 @@ def _ws_tts_worker(
 
 class TTSSentenceStreamer:
 
-    def __init__(self, on_audio_chunk):
+    def __init__(self, on_audio_chunk,voice_id: str):
         self.on_audio_chunk = on_audio_chunk
+        self.voice_id = voice_id
 
     async def stream(
         self,
@@ -120,7 +122,7 @@ class TTSSentenceStreamer:
         worker_future = loop.run_in_executor(
             None,
             _ws_tts_worker,
-            sentence_q, audio_q, cancel_event, loop,full_parts
+            sentence_q, audio_q, cancel_event, loop,full_parts, self.voice_id,
         )
 
         # ── drain audio_q and forward chunks ─────────────────────────────────
